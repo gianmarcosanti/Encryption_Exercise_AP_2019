@@ -1,4 +1,3 @@
-import javax.management.ObjectName;
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -12,7 +11,7 @@ import java.util.stream.Collectors;
 
 
 
-public class TestAlg {
+public class TestAlgPlus {
 
     private List<String> getListOfStringFromFile(File file){
 
@@ -33,11 +32,18 @@ public class TestAlg {
         return listToReturn;
     }
 
+    /**
+     * This method takes care of getting the classes contained in the folder algos and getting the instance of the class
+     * represented by those files.
+     *
+     * @param cryptoParentFolder Parent folder of crypto
+     * @return  list of classes of the file contained in the directory /crypto/algos
+     * @throws IOException
+     */
+    public List<Class<?>> getListOfAlgos(File cryptoParentFolder) throws IOException {
 
-    public List<Class<?>> getListOfAlgos(File root) throws IOException {
 
-
-        File algoRoot = new File(root.getPath()+"/crypto/algos");
+        File algoRoot = new File(cryptoParentFolder.getPath()+"/crypto/algos");
         List<String> listOfNames =  Arrays.stream(algoRoot.listFiles())
                 .map(x->"crypto.algos." + x.getName().replace(".class", ""))
                 .collect(Collectors.toList());
@@ -46,7 +52,7 @@ public class TestAlg {
                 .map(x-> {
                     try {
 
-                        return getClassFromString(x, root);
+                        return getClassFromString(x, cryptoParentFolder);
 
                     } catch (MalformedURLException | ClassNotFoundException e) {
                         e.printStackTrace();
@@ -66,6 +72,14 @@ public class TestAlg {
         return classLoader.loadClass(c);
     }
 
+    /**
+     *
+     * This method takes care of reading the file keys.list line by line and converting each line in a couple of
+     * type <Class, Key> that will be inserted in the keyRegistry map and then returned as result.
+     *
+     * @param cryptoParentFolder Parent folder of crypto
+     * @return An object of type KeyRegistry which is a wrapper of an HashMap that contains couples of type <Class, Key>
+     */
     public KeyRegistry getKeyRegistryFromFile(File cryptoParentFolder){
 
         File keyList = new File(cryptoParentFolder + "/crypto/keys.list");
@@ -88,6 +102,20 @@ public class TestAlg {
 
     }
 
+
+    /**
+     *
+     * This method takes care of testing the encryption algorithm by instantiating an instance of the one and then
+     * invoking the methods of encryption and decryption checking the correctness of the ones
+     *
+     * @param constructor Costructor of the algorithm to test
+     * @param key Encryption key for the algorithm to test
+     * @param listOfValidMethods List of methods of the class to test
+     * @param secret Secret word that will be used to test the algorithm
+     * @throws IllegalAccessException
+     * @throws InvocationTargetException
+     * @throws InstantiationException
+     */
     public void testAlgorithm(Constructor<?> constructor, String key, List<Method> listOfValidMethods, String secret) throws IllegalAccessException, InvocationTargetException, InstantiationException {
 
         Object algorithm = constructor.newInstance(key);
@@ -108,6 +136,18 @@ public class TestAlg {
     }
 
 
+    /**
+     *
+     * This method first reads all the couples <class, key> of the file keys.list invoking the method
+     * getKeyRegistryFromFile(Sring), then it occupies to retrieve all the algorithm's classes from the folder "algos" by
+     * invoking getListOfAlgos(String). Once it has both the information it starts the process of instantiation of the classes
+     * previously mentioned.
+     * Once it has retrieved all the necessary data, it call the method  testAlgorithm(...) which will test the algorithm.
+     *
+     * @param path path of the parent directory of crypto
+     * @throws IOException
+     */
+
     public void checkAlgorithms(String path) throws IOException {
         File cryptoParentFolder = new File(path);
 
@@ -120,23 +160,33 @@ public class TestAlg {
 
                     String key = keyRegistry.get(x);
                     Constructor<?> constructor = null;
-                    List<Method> listOfValidMethods = null;
+                    List<Method> listOfValidMethodsByName = new ArrayList<>();
                     try {
                         constructor = x.getDeclaredConstructor(String.class);
-                        listOfValidMethods = Arrays.stream(x.getDeclaredMethods())
+                        listOfValidMethodsByName = Arrays.stream(x.getDeclaredMethods())
                                 .filter(y -> y.getParameterTypes().length == 1 && y.getParameterTypes()[0] == String.class)
                                 .filter(y -> y.getName().startsWith("dec") || y.getName().startsWith("enc"))
                                 .collect(Collectors.toList());
+                        if(listOfValidMethodsByName.size() == 0)
+                            listOfValidMethodsByName =
+                                    Arrays.stream(x.getDeclaredMethods())
+                                    .filter(y ->Arrays.stream(y.getDeclaredAnnotations())
+                                                .filter(z -> z.annotationType().getName().equals("crypto.annot.Encrypt")
+                                                        || z.annotationType().getName().equals("crypto.annot.Decrypt"))
+                                                .count() >= 1)
+                                    .collect(Collectors.toList());
+
+
                     } catch (NoSuchMethodException e) {
                         e.printStackTrace();
                     }
 
-                    if(constructor != null && listOfValidMethods != null && listOfValidMethods.size() == 2){
+                    if(constructor != null  && (listOfValidMethodsByName.size() == 2)){
 
                         File secret = new File(path +"/crypto/secret.list");
 
                         Constructor<?> finalConstructor = constructor;
-                        List<Method> finalListOfValidMethods = listOfValidMethods;
+                        List<Method> finalListOfValidMethods = listOfValidMethodsByName;
 
                         getListOfStringFromFile(secret).stream()
                                 .forEach(y -> {
@@ -159,12 +209,11 @@ public class TestAlg {
 
     public static void main(String[] argv) throws IOException {
 
-        // /Users/gianmarcosanti/Library/Mobile Documents/com~apple~CloudDocs/UNIPI/AdvancedProgramming/FirstAssigment
         Scanner sc = new Scanner(System.in);
         System.out.println("Enter the path for the parent folder of 'crypto'");
 
 
-        new TestAlg().checkAlgorithms(sc.nextLine());
+        new TestAlgPlus().checkAlgorithms(sc.nextLine());
     }
 
 }
