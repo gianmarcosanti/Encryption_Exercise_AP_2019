@@ -198,7 +198,6 @@ public class TestAlg {
 
     public static void main(String[] argv) throws IOException {
 
-        // /Users/gianmarcosanti/Library/Mobile Documents/com~apple~CloudDocs/UNIPI/AdvancedProgramming/FirstAssigment
         Scanner sc = new Scanner(System.in);
         System.out.println("Enter the path for the parent folder of 'crypto'");
 
